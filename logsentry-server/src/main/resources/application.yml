@@ -1,0 +1,87 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: logsentry
+
+  # --- Default profile uses H2 (no Docker needed) ---
+  datasource:
+    url: jdbc:h2:mem:logsentry;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+
+  h2:
+    console:
+      enabled: true
+      path: /h2-console
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.H2Dialect
+        format_sql: true
+
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    consumer:
+      group-id: logsentry-consumer
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      properties:
+        spring.json.trusted.packages: com.logsentry.*
+        spring.json.value.default.type: com.logsentry.model.LogEvent
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+
+# --- Actuator / Prometheus ---
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus,metrics
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+    tags:
+      application: logsentry
+
+# --- LogSentry custom ---
+logsentry:
+  kafka:
+    topic: log-events
+  detection:
+    window-size-seconds: 10
+    learning-windows: 6
+    spike-threshold-sigma: 3.0
+    drift-threshold-sigma: 2.0
+    sustained-windows: 3
+
+---
+# PostgreSQL profile (activated via SPRING_PROFILES_ACTIVE=postgres)
+spring:
+  config:
+    activate:
+      on-profile: postgres
+
+  datasource:
+    url: jdbc:postgresql://${POSTGRES_HOST:localhost}:5432/logsentry
+    driver-class-name: org.postgresql.Driver
+    username: ${POSTGRES_USER:logsentry}
+    password: ${POSTGRES_PASSWORD:logsentry}
+
+  jpa:
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+
+  h2:
+    console:
+      enabled: false
